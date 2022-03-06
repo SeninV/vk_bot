@@ -1,10 +1,6 @@
 import typing
-from datetime import datetime
 from logging import getLogger
-import random
-import time
-from app.store.bot.models import ScoreModel, GameModel
-from app.store.vk_api.dataclasses import Update, Message, KeyboardMessage
+from app.store.vk_api.dataclasses import Update, Message
 
 if typing.TYPE_CHECKING:
     from app.web.app import Application
