@@ -23,3 +23,4 @@ class BotManager:
                     peer_id=update.object.peer_id,
                 )
             )
+            a =1
