@@ -25,13 +25,22 @@ class GameModel(db.Model):
     chat_id = db.Column(db.Integer(), nullable=False)
     status = db.Column(db.String(), nullable=False)
     start = db.Column(db.DateTime(), server_default=func.now())
-    end = db.Column(db.DateTime(), nullable=False)
+    end = db.Column(db.DateTime(), server_default=func.now())
     duration = db.Column(db.Integer(), nullable=False)
     theme_id = db.Column(db.Integer(), db.ForeignKey("themes.id", ondelete="CASCADE"))
     unused_questions = db.Column(db.ARRAY(db.String()))
 
     def to_dc(self):
-        return Game(**self.svalue)
+        return Game(
+            id=self.id,
+            chat_id=self.chat_id,
+            status=self.status,
+            start=self.start,
+            end=self.end,
+            duration=self.duration,
+            theme_id=self.theme_id,
+            unused_questions=self.unused_questions,
+        )
 
 
 @dataclass
@@ -53,7 +62,13 @@ class UserModel(db.Model):
     win_count = db.Column(db.Integer())
 
     def to_dc(self):
-        return User(**self.svalue)
+        return User(
+            id=self.id,
+            user_id=self.user_id,
+            first_name=self.first_name,
+            last_name=self.last_name,
+            win_count=self.win_count,
+        )
 
 
 @dataclass
@@ -77,4 +92,10 @@ class ScoreModel(db.Model):
     user_attempts = db.Column(db.Integer(), nullable=False)
 
     def to_dc(self):
-        return Score(**self.svalue)
+        return Score(
+            id=self.id,
+            game_id=self.game_id,
+            user_id=self.user_id,
+            points=self.points,
+            user_attempts=self.user_attempts,
+        )
