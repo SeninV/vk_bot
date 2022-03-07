@@ -11,5 +11,6 @@ class BotAccessor(BaseAccessor):
             .order_by(GameModel.id.desc())
             .gino.first()
         )
-        if last_game:
-            return last_game.to_dc()
+        if not last_game:
+            return None
+        return last_game.to_dc()
