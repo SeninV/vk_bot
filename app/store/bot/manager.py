@@ -54,6 +54,7 @@ class BotManager:
                         peer_id=update.object.peer_id,
                     )
                 )
+                a = 1
                 break
 
     async def choose_duration(
@@ -72,7 +73,6 @@ class BotManager:
                 members = await self.app.store.vk_api.get_members(
                     chat_id=update.object.peer_id
                 )
-
                 for member in members:
                     if member["id"] not in existing_mambers:
                         await self.app.store.bot_accessor.create_user(
