@@ -3,7 +3,6 @@ from typing import List, Optional
 from app.store.bot.models import UserModel, Game, GameModel, Score, ScoreModel
 
 
-
 class BotAccessor(BaseAccessor):
     async def last_game(self, chat_id: int) -> Optional[Game]:
         last_game = (
