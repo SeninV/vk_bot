@@ -65,6 +65,13 @@ class BotAccessor(BaseAccessor):
             text += f" %0A {duration} мин"
         return text
 
+    def answer_response_keyboard(self, answer: List[Answer]) -> List[str]:
+        text = []
+        for ans in answer:
+            text += [ans.title]
+        return text
+
+
     async def create_game(self, chat_id: int) -> Game:
         game = await GameModel.create(
             chat_id=chat_id,
@@ -84,9 +91,3 @@ class BotAccessor(BaseAccessor):
         if not last_game:
             return None
         return last_game.to_dc()
-
-    def answer_response_keyboard(self, answer: List[Answer]) -> List[str]:
-        text = []
-        for ans in answer:
-            text += [ans.title]
-        return text
