@@ -97,6 +97,7 @@ class BotManager:
                 )
                 break
 
+
     async def handle_updates(self, updates: list[Update]):
         for update in updates:
             game = await self.app.store.bot_accessor.last_game(update.object.peer_id)
