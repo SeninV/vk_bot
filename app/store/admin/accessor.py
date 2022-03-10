@@ -4,6 +4,7 @@ from typing import Optional
 
 from app.base.base_accessor import BaseAccessor
 from app.admin.models import Admin, AdminModel
+
 if typing.TYPE_CHECKING:
     from app.web.app import Application
 

@@ -68,7 +68,11 @@ class QuizAccessor(BaseAccessor):
     async def get_question_by_title(self, title: str) -> Optional[Question]:
         query = self._get_question_join().where(QuestionModel.title == title)
         questions = await self._get_questions_load(query)
+        return None if not questions else questions[0].to_dc()
 
+    async def get_question_by_id(self, id: int) -> Optional[Question]:
+        query = self._get_question_join().where(QuestionModel.id == id)
+        questions = await self._get_questions_load(query)
         return None if not questions else questions[0].to_dc()
 
     async def list_questions(self, theme_id: Optional[int] = None) -> List[Question]:

@@ -15,7 +15,7 @@ class Game:
     end: datetime
     duration: int
     theme_id: int
-    unused_questions: List[str]
+    unused_questions: List[int]
 
 
 class GameModel(db.Model):
@@ -28,7 +28,7 @@ class GameModel(db.Model):
     end = db.Column(db.DateTime(), server_default=func.now())
     duration = db.Column(db.Integer(), nullable=False)
     theme_id = db.Column(db.Integer(), db.ForeignKey("themes.id", ondelete="CASCADE"))
-    unused_questions = db.Column(db.ARRAY(db.String()))
+    unused_questions = db.Column(db.ARRAY(db.Integer()))
 
     def to_dc(self):
         return Game(

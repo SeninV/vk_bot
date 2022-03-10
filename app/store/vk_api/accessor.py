@@ -130,7 +130,5 @@ class VkApiAccessor(BaseAccessor):
         ) as resp:
             data = await resp.json()
             # self.logger.info(data)
-            members = []
-            for i in data["response"]["items"]:
-                members.append(i["member_id"])
+            members = data["response"]["profiles"]
         return members
