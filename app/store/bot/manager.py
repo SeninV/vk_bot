@@ -95,30 +95,29 @@ class BotManager:
         )
 
 
-    async def handle_updates(self, updates: list[Update]):
-        for update in updates:
-            game = await self.app.store.bot_accessor.last_game(update.object.peer_id)
-            # Если раньше не было игр в беседе
-            if not game:
-                if update.object.body == "\start":
-                    await self.start_game(update)
-            else:
-                # Если раньше были игры
-                game_status = game.status
-                if game_status == GameStatus.FINISH and update.object.body == "\start":
-                    await self.start_game(update)
-                if game_status == GameStatus.START and update.object.body.isdigit():
-                    await self.choose_theme(update)
-                    await self.send_durations(update)
-                elif game_status == GameStatus.DURATION and update.object.body.isdigit():
-                    await self.choose_duration(update, game_id=game.id)
-                    await self.ask_question(update, unused_questions=game.unused_questions)
-                elif game_status == GameStatus.PLAYING:
-                    pass
+    async def handle_updates(self, update: Update):
+        game = await self.app.store.bot_accessor.last_game(update.object.peer_id)
+        # Если раньше не было игр в беседе
+        if not game:
+            if update.object.body == "\start":
+                await self.start_game(update)
+        else:
+            # Если раньше были игры
+            game_status = game.status
+            if game_status == GameStatus.FINISH and update.object.body == "\start":
+                await self.start_game(update)
+            if game_status == GameStatus.START and update.object.body.isdigit():
+                await self.choose_theme(update)
+                await self.send_durations(update)
+            elif game_status == GameStatus.DURATION and update.object.body.isdigit():
+                await self.choose_duration(update, game_id=game.id)
+                await self.ask_question(update, unused_questions=game.unused_questions)
+            elif game_status == GameStatus.PLAYING:
+                pass
 
-            await self.app.store.vk_api.send_message(
-                Message(
-                    text="\start - начало игры %0A \stat - статистика по игре  %0A \end - окончание по игры",
-                    peer_id=update.object.peer_id,
-                )
+        await self.app.store.vk_api.send_message(
+            Message(
+                text="\start - начало игры %0A \stat - статистика по игре  %0A \end - окончание по игры",
+                peer_id=update.object.peer_id,
             )
+        )

@@ -18,7 +18,7 @@ class Poller:
     async def worker(self, queue):
         while True:
             update = await queue.get()
-            await self.store.bots_manager.handle_updates(update)
+            await self.store.bots_manager.handle_updates(update[0])
             queue.task_done()
 
 
