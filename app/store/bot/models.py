@@ -2,9 +2,24 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List
 from sqlalchemy.sql import func
-
+from enum import Enum
 from app.store.database.gino import db
 
+
+class GameStatus(Enum):
+    START = 'start'
+    DURATION = 'duration'
+    PLAYING = 'playing'
+    FINISH = 'finish'
+
+    def __str__(self):
+        return str(self.value)
+
+    def __eq__(self, other):
+        return str(self) == str(other)
+
+    def __hash__(self):
+        return hash(str(self))
 
 @dataclass
 class Game:

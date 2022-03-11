@@ -12,13 +12,8 @@ from app.store.bot.models import UserModel, Game, GameModel, Score, ScoreModel
 class BotAccessor(BaseAccessor):
     async def connect(self, app: "Application"):
         await super().connect(app)
-        themes = await self.app.store.quizzes.list_themes()
-        data = ThemeListSchema().dump({"themes": themes})["themes"]
-        # Список возможных тем
-        self.themes = data
         # Возможное время игры в минутах
-        games_duration = [3, 4, 5]
-        self.durations = games_duration
+        self.durations = [3, 4, 5]
 
     async def create_user(self, user_id: int, first_name: str, last_name: str):
         await UserModel.create(
@@ -40,21 +35,12 @@ class BotAccessor(BaseAccessor):
         user_list = await UserModel.query.gino.all()
         return [o.to_dc() for o in user_list]
 
-    async def get_all_users_id(self) -> Optional[list]:
-        user_list = await self.get_all_users()
-        if not user_list:
-            return user_list
-        user_list = UserListSchema().dump({"users": user_list})["users"]
-        user_id_list = []
-        for user in user_list:
-            user_id_list.append(user["user_id"])
-        return user_id_list
 
-    def theme_response(self) -> str:
+    def theme_response(self, themes_all) -> str:
         text = ""
         themes = []
-        for d in self.themes:
-            themes.append(d["title"])
+        for d in themes_all:
+            themes.append(d.title)
         for i, th in enumerate(themes):
             text += f"%0A ************ %0A {i+1} - {th}"
         return text
@@ -81,6 +67,29 @@ class BotAccessor(BaseAccessor):
             unused_questions="",
         )
         return game.to_dc()
+
+
+    async def update_game_theme(self, chat_id: int, status: str, theme_id: int, unused_questions: list[int]):
+        await GameModel.update.where(
+            GameModel.chat_id == chat_id
+        ).where(GameModel.status == "start").gino.first(
+            {
+                "status": status,
+                "theme_id": theme_id,
+                "unused_questions": unused_questions,
+            }
+        )
+
+    async def update_game_duration(self, chat_id: int, status: str, duration: int):
+        await GameModel.update.where(
+            GameModel.chat_id == chat_id
+        ).where(GameModel.status == "duration").gino.first(
+            {
+                "status": status,
+                "duration": duration,
+            }
+        )
+
 
     async def last_game(self, chat_id: int) -> Optional[Game]:
         last_game = (
