@@ -71,7 +71,6 @@ class BotAccessor(BaseAccessor):
             text += [ans.title]
         return text
 
-
     async def create_game(self, chat_id: int) -> Game:
         game = await GameModel.create(
             chat_id=chat_id,

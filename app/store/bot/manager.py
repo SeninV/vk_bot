@@ -3,7 +3,7 @@ import random
 from logging import getLogger
 
 from app.store.bot.models import GameModel
-from app.store.vk_api.dataclasses import Update, Message
+from app.store.vk_api.dataclasses import Update, Message, KeyboardMessage
 
 if typing.TYPE_CHECKING:
     from app.web.app import Application
@@ -54,7 +54,6 @@ class BotManager:
                         peer_id=update.object.peer_id,
                     )
                 )
-                a = 1
                 break
 
     async def choose_duration(
@@ -89,13 +88,26 @@ class BotManager:
                 keyboard_answer = self.app.store.bot_accessor.answer_response_keyboard(
                     question.answers
                 )
-                await self.app.store.vk_api.send_message(
-                    Message(
-                        text=f"Вопрос: {question.title} %0A" f"%0A {keyboard_answer}",
+                await self.app.store.vk_api.send_keyboard(
+                    KeyboardMessage(
+                        text=f"Вопрос: {question.title} %0A",
                         peer_id=update.object.peer_id,
+                        keyboard_text=keyboard_answer,
                     )
                 )
                 break
+
+    async def playing_game(
+            self, update: Update, game_id: int, unused_questions: list[int]
+    ):
+        question = await self.app.store.quizzes.get_question_by_id(
+            unused_questions[0]
+        )
+        for answer in question.answers:
+            if answer.title == update.object.body:
+                a = answer.title
+                break
+
 
 
     async def handle_updates(self, updates: list[Update]):
@@ -115,6 +127,7 @@ class BotManager:
                 elif game_status == "duration":
                     await self.choose_duration(update, game.id, game.unused_questions)
                 elif game_status == "playing":
+                    await self.playing_game(update, game.id, game.unused_questions)
                     pass
 
             await self.app.store.vk_api.send_message(
