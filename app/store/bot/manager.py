@@ -115,6 +115,7 @@ class BotManager:
             elif game_status == GameStatus.PLAYING:
                 pass
 
+
         await self.app.store.vk_api.send_message(
             Message(
                 text="\start - начало игры %0A \stat - статистика по игре  %0A \end - окончание по игры",
