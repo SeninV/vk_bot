@@ -13,7 +13,8 @@ class BotAccessor(BaseAccessor):
     async def connect(self, app: "Application"):
         await super().connect(app)
         # Возможное время игры в минутах
-        self.durations = [3, 4, 5]
+        self.game_durations = [1, 2, 3, 4, 5]
+        self.question_durations = [10, 20, 30]
 
     async def create_user(self, user_id: int, first_name: str, last_name: str):
         await UserModel.create(
@@ -67,10 +68,16 @@ class BotAccessor(BaseAccessor):
             text += f"%0A ************ %0A {i+1} - {th}"
         return text
 
-    def duration_response(self) -> str:
+    def game_duration_response(self) -> str:
         text = ""
-        for duration in self.durations:
+        for duration in self.game_durations:
             text += f" %0A {duration} мин"
+        return text
+
+    def question_duration_response(self) -> str:
+        text = ""
+        for duration in self.question_durations:
+            text += f" %0A {duration} сек"
         return text
 
     def answer_response_keyboard(self, answer: List[Answer]) -> List[str]:
@@ -88,7 +95,8 @@ class BotAccessor(BaseAccessor):
         game = await GameModel.create(
             chat_id=chat_id,
             status="start",
-            duration=0,
+            duration_game=0,
+            duration_question=0,
             theme_id=1,
             unused_questions="",
         )
@@ -113,7 +121,18 @@ class BotAccessor(BaseAccessor):
         ).gino.first(
             {
                 "status": status,
-                "duration": duration,
+                "duration_game": duration,
+            }
+        )
+
+    async def update_question_duration(self, chat_id: int, status: str, duration: int):
+        await GameModel.update.where(GameModel.chat_id == chat_id).where(
+            GameModel.status == "duration_question"
+        ).gino.first(
+            {
+                "status": status,
+                "start": datetime.now(),
+                "duration_question": duration,
             }
         )
 
@@ -148,6 +167,14 @@ class BotAccessor(BaseAccessor):
         if not last_game:
             return None
         return last_game.to_dc()
+
+    async def played_game_status(self, game_id: int) -> Optional[Game]:
+        played_game = await GameModel.query.where(GameModel.id == game_id).gino.first()
+        return played_game.to_dc().status
+
+    async def played_game_questions(self, game_id: int) -> Optional[Game]:
+        played_game = await GameModel.query.where(GameModel.id == game_id).gino.first()
+        return played_game.to_dc().unused_questions
 
     async def stat_game_response(self, game_id: int) -> str:
         participants = (

@@ -1,5 +1,7 @@
+import asyncio
 import typing
 import random
+from asyncio import Task
 from logging import getLogger
 
 from app.store.bot.models import GameModel, GameStatus
@@ -14,8 +16,71 @@ class BotManager:
         self.app = app
         self.bot = None
         self.logger = getLogger("handler")
-        self.start = {}
-        self.time = {}
+        self.time_task = []
+
+    def create_game_timeout_callback(self, task: Task):
+        async def check_game(task: Task):
+            game_id = task.result()["game_id"]
+            update = task.result()["update"]
+            if (
+                await self.app.store.bot_accessor.played_game_status(game_id=game_id)
+                != GameStatus.FINISH
+            ):
+                await self.app.store.vk_api.send_message(
+                    Message(
+                        text=f"Время игры",
+                        peer_id=update.object.peer_id,
+                    )
+                )
+                await self.game_over(update, game_id=game_id)
+
+        asyncio.create_task(coro=check_game(task=task))
+
+    def create_question_timeout_callback(self, task: Task):
+        async def check_question(task: Task):
+            game_id = task.result()["game_id"]
+            update = task.result()["update"]
+            unused_questions = task.result()["unused_questions"]
+            time_to_sleep = task.result()["time_to_sleep"]
+            if len(unused_questions) == len(
+                await self.app.store.bot_accessor.played_game_questions(game_id=game_id)
+            ):
+                await self.app.store.vk_api.send_message(
+                    Message(
+                        text=f"Время на вопрос истекло",
+                        peer_id=update.object.peer_id,
+                    )
+                )
+                await self.checking_last_question(
+                    update=update,
+                    game_id=game_id,
+                    unused_questions=unused_questions[1:],
+                    time_to_sleep=time_to_sleep,
+                )
+
+        asyncio.create_task(coro=check_question(task=task))
+
+    async def timeout_task_game(self, update: Update, game_id: int, sleep: int):
+        return await asyncio.sleep(
+            delay=sleep,
+            result={
+                "update": update,
+                "game_id": game_id,
+            },
+        )
+
+    async def timeout_task_question(
+        self, update: Update, game_id: int, sleep: int, unused_questions: list[int]
+    ):
+        return await asyncio.sleep(
+            delay=sleep,
+            result={
+                "update": update,
+                "game_id": game_id,
+                "unused_questions": unused_questions,
+                "time_to_sleep": sleep
+            },
+        )
 
     async def start_game(self, update: Update):
         await self.app.store.bot_accessor.create_game(
@@ -46,8 +111,8 @@ class BotManager:
             )
             return True
 
-    async def send_durations(self, update: Update):
-        durations = self.app.store.bot_accessor.duration_response()
+    async def send_game_durations(self, update: Update):
+        durations = self.app.store.bot_accessor.game_duration_response()
         await self.app.store.vk_api.send_message(
             Message(
                 text=f"Выберите длительность раунда: {durations}",
@@ -55,14 +120,14 @@ class BotManager:
             )
         )
 
-    async def choose_duration(self, update: Update, game_id: int) -> bool:
-        durations = self.app.store.bot_accessor.durations
+    async def choose_game_duration(self, update: Update, game_id: int) -> bool:
+        durations = self.app.store.bot_accessor.game_durations
         if not int(update.object.body) in durations:
             return False
         else:
             await self.app.store.bot_accessor.update_game_duration(
                 chat_id=update.object.peer_id,
-                status="playing",
+                status="duration_question",
                 duration=int(update.object.body),
             )
 
@@ -82,6 +147,51 @@ class BotManager:
                 await self.app.store.bot_accessor.create_user_score(
                     game_id=game_id, user_id=member["id"], points=0, user_attempts=0
                 )
+            return True
+
+    async def send_question_durations(self, update: Update):
+        durations = self.app.store.bot_accessor.question_duration_response()
+        await self.app.store.vk_api.send_message(
+            Message(
+                text=f"Выберите длительность каждого вопроса: {durations}",
+                peer_id=update.object.peer_id,
+            )
+        )
+
+    async def choose_question_duration(
+        self,
+        update: Update,
+        game_id: int,
+        game_duration: int,
+        unused_questions: list[int],
+    ) -> bool:
+        durations = self.app.store.bot_accessor.question_durations
+        if not int(update.object.body) in durations:
+            return False
+        else:
+
+            await self.app.store.bot_accessor.update_question_duration(
+                chat_id=update.object.peer_id,
+                status="playing",
+                duration=int(update.object.body),
+            )
+
+            game_task = asyncio.create_task(
+                self.timeout_task_game(
+                    update=update, game_id=game_id, sleep=game_duration * 60
+                )
+            )
+            game_task.add_done_callback(self.create_game_timeout_callback)
+
+            question_task = asyncio.create_task(
+                self.timeout_task_question(
+                    update=update,
+                    game_id=game_id,
+                    sleep=int(update.object.body),
+                    unused_questions=unused_questions,
+                )
+            )
+            question_task.add_done_callback(self.create_question_timeout_callback)
             return True
 
     async def ask_question(self, update: Update, unused_questions: list[int]):
@@ -112,7 +222,7 @@ class BotManager:
         )
 
     async def checking_last_question(
-        self, update: Update, game_id: int, unused_questions: list[int]
+        self, update: Update, game_id: int, unused_questions: list[int], time_to_sleep:int
     ):
         if not unused_questions:
             await self.game_over(update, game_id=game_id)
@@ -123,8 +233,19 @@ class BotManager:
             await self.app.store.bot_accessor.reset_to_zero_attempts(game_id=game_id)
             await self.ask_question(update, unused_questions=unused_questions)
 
+            question_task = asyncio.create_task(
+                self.timeout_task_question(
+                    update=update,
+                    game_id=game_id,
+                    sleep=time_to_sleep,
+                    unused_questions=unused_questions,
+                )
+            )
+            question_task.add_done_callback(self.create_question_timeout_callback)
+
+
     async def response_processing(
-        self, update: Update, game_id: int, unused_questions: list[int]
+        self, update: Update, game_id: int, unused_questions: list[int], time_to_sleep:int
     ):
         users_with_attempts_list = (
             await self.app.store.bot_accessor.get_users_with_attempts(game_id=game_id)
@@ -151,7 +272,10 @@ class BotManager:
                 )
                 # Если остались еще вопросы
                 await self.checking_last_question(
-                    update=update, game_id=game_id, unused_questions=unused_questions[1:]
+                    update=update,
+                    game_id=game_id,
+                    unused_questions=unused_questions[1:],
+                    time_to_sleep=time_to_sleep,
                 )
 
             else:
@@ -164,6 +288,7 @@ class BotManager:
                         update=update,
                         game_id=game_id,
                         unused_questions=unused_questions[1:],
+                        time_to_sleep=time_to_sleep,
                     )
 
     async def handle_updates(self, update: Update):
@@ -179,15 +304,28 @@ class BotManager:
                 await self.start_game(update)
             if game_status == GameStatus.START and update.object.body.isdigit():
                 if await self.choose_theme(update):
-                    await self.send_durations(update)
+                    await self.send_game_durations(update)
             elif game_status == GameStatus.DURATION and update.object.body.isdigit():
-                if await self.choose_duration(update, game_id=game.id):
+                if await self.choose_game_duration(update, game_id=game.id):
+                    await self.send_question_durations(update)
+
+            elif (
+                game_status == GameStatus.DURATION_QUESTION
+                and update.object.body.isdigit()
+            ):
+                if await self.choose_question_duration(
+                    update=update,
+                    game_id=game.id,
+                    game_duration=game.duration_game,
+                    unused_questions=game.unused_questions,
+                ):
                     await self.ask_question(
                         update, unused_questions=game.unused_questions
                     )
+
             elif game_status == GameStatus.PLAYING:
                 await self.response_processing(
-                    update, game_id=game.id, unused_questions=game.unused_questions
+                    update, game_id=game.id, unused_questions=game.unused_questions, time_to_sleep=game.duration_question,
                 )
 
         await self.app.store.vk_api.send_message(

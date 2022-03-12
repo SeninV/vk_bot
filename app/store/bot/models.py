@@ -9,6 +9,7 @@ from app.store.database.gino import db
 class GameStatus(Enum):
     START = "start"
     DURATION = "duration"
+    DURATION_QUESTION = "duration_question"
     PLAYING = "playing"
     FINISH = "finish"
 
@@ -29,7 +30,8 @@ class Game:
     status: str
     start: datetime
     end: datetime
-    duration: int
+    duration_game: int
+    duration_question: int
     theme_id: int
     unused_questions: List[int]
 
@@ -42,7 +44,8 @@ class GameModel(db.Model):
     status = db.Column(db.String(), nullable=False)
     start = db.Column(db.DateTime(), server_default=func.now())
     end = db.Column(db.DateTime(), server_default=func.now())
-    duration = db.Column(db.Integer(), nullable=False)
+    duration_game = db.Column(db.Integer(), nullable=False)
+    duration_question = db.Column(db.Integer(), nullable=False)
     theme_id = db.Column(db.Integer(), db.ForeignKey("themes.id", ondelete="CASCADE"))
     unused_questions = db.Column(db.ARRAY(db.Integer()))
 
@@ -53,7 +56,8 @@ class GameModel(db.Model):
             status=self.status,
             start=self.start,
             end=self.end,
-            duration=self.duration,
+            duration_game=self.duration_game,
+            duration_question=self.duration_question,
             theme_id=self.theme_id,
             unused_questions=self.unused_questions,
         )
