@@ -20,3 +20,10 @@ class Update:
 class Message:
     peer_id: int
     text: str
+
+
+@dataclass
+class KeyboardMessage:
+    peer_id: int
+    text: str
+    keyboard_text: List[str]
