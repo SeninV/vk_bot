@@ -20,3 +20,4 @@ class Update:
 class Message:
     peer_id: int
     text: str
+

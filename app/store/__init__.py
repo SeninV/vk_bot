@@ -22,6 +22,7 @@ class Store:
         self.bots_manager = BotManager(app)
 
 
+
 def setup_store(app: "Application"):
     app.database = Database(app)
     app.on_startup.append(app.database.connect)

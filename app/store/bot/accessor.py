@@ -1,96 +1,10 @@
-from datetime import datetime
-
-from app.admin.schemes import UserListSchema
 from app.base.base_accessor import BaseAccessor
 from typing import List, Optional
-
-from app.quiz.models import Answer
-from app.quiz.schemes import ThemeListSchema
 from app.store.bot.models import UserModel, Game, GameModel, Score, ScoreModel
 
 
+
 class BotAccessor(BaseAccessor):
-    async def connect(self, app: "Application"):
-        await super().connect(app)
-        # Возможное время игры в минутах
-        self.durations = [3, 4, 5]
-
-    async def create_user(self, user_id: int, first_name: str, last_name: str):
-        await UserModel.create(
-            user_id=user_id,
-            first_name=first_name,
-            last_name=last_name,
-            win_count=0,
-        )
-
-    async def create_user_score(
-        self, game_id: int, user_id: int, points: int, user_attempts: int
-    ) -> Score:
-        score = await ScoreModel.create(
-            game_id=game_id, user_id=user_id, points=points, user_attempts=user_attempts
-        )
-        return score.to_dc()
-
-    async def get_all_users(self) -> Optional[list]:
-        user_list = await UserModel.query.gino.all()
-        return [o.to_dc() for o in user_list]
-
-
-    def theme_response(self, themes_all) -> str:
-        text = ""
-        themes = []
-        for d in themes_all:
-            themes.append(d.title)
-        for i, th in enumerate(themes):
-            text += f"%0A ************ %0A {i+1} - {th}"
-        return text
-
-    def duration_response(self) -> str:
-        text = ""
-        for duration in self.durations:
-            text += f" %0A {duration} мин"
-        return text
-
-    def answer_response_keyboard(self, answer: List[Answer]) -> List[str]:
-        text = []
-        for ans in answer:
-            text += [ans.title]
-        return text
-
-
-    async def create_game(self, chat_id: int) -> Game:
-        game = await GameModel.create(
-            chat_id=chat_id,
-            status="start",
-            duration=0,
-            theme_id=1,
-            unused_questions="",
-        )
-        return game.to_dc()
-
-
-    async def update_game_theme(self, chat_id: int, status: str, theme_id: int, unused_questions: list[int]):
-        await GameModel.update.where(
-            GameModel.chat_id == chat_id
-        ).where(GameModel.status == "start").gino.first(
-            {
-                "status": status,
-                "theme_id": theme_id,
-                "unused_questions": unused_questions,
-            }
-        )
-
-    async def update_game_duration(self, chat_id: int, status: str, duration: int):
-        await GameModel.update.where(
-            GameModel.chat_id == chat_id
-        ).where(GameModel.status == "duration").gino.first(
-            {
-                "status": status,
-                "duration": duration,
-            }
-        )
-
-
     async def last_game(self, chat_id: int) -> Optional[Game]:
         last_game = (
             await GameModel.query.where(GameModel.chat_id == chat_id)
