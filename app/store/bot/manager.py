@@ -30,9 +30,11 @@ class BotManager:
             )
         )
 
-    async def choose_theme(self, update: Update):
+    async def choose_theme(self, update: Update) -> bool:
         theme = await self.app.store.quizzes.get_theme_by_id(int(update.object.body))
-        if theme:
+        if not theme:
+            return False
+        else:
             questions = await self.app.store.quizzes.list_questions(theme_id=theme.id)
             unused_questions = [question.id for question in questions]
 
@@ -53,9 +55,11 @@ class BotManager:
             )
         )
 
-    async def choose_duration(self, update: Update, game_id: int):
+    async def choose_duration(self, update: Update, game_id: int) -> bool:
         durations = self.app.store.bot_accessor.durations
-        if int(update.object.body) in durations:
+        if not int(update.object.body) in durations:
+            return False
+        else:
             await self.app.store.bot_accessor.update_game_duration(
                 chat_id=update.object.peer_id,
                 status="playing",
@@ -100,24 +104,24 @@ class BotManager:
         participants = await self.app.store.bot_accessor.stat_game_response(
             game_id=game_id
         )
-        await self.app.store.vk_api.delet_keyboard(
+        await self.app.store.vk_api.delete_keyboard(
             Message(
                 text=f"Конец игры! %0A Итоговый счет: {participants}",
                 peer_id=update.object.peer_id,
             )
         )
 
-    async def checking_next_question(
+    async def checking_last_question(
         self, update: Update, game_id: int, unused_questions: list[int]
     ):
-        if unused_questions[1:]:
+        if not unused_questions:
+            await self.game_over(update, game_id=game_id)
+        else:
             await self.app.store.bot_accessor.update_game_unused_questions(
-                chat_id=update.object.peer_id, unused_questions=unused_questions[1:]
+                chat_id=update.object.peer_id, unused_questions=unused_questions
             )
             await self.app.store.bot_accessor.reset_to_zero_attempts(game_id=game_id)
-            await self.ask_question(update, unused_questions=unused_questions[1:])
-        else:
-            await self.game_over(update, game_id=game_id)
+            await self.ask_question(update, unused_questions=unused_questions)
 
     async def response_processing(
         self, update: Update, game_id: int, unused_questions: list[int]
@@ -146,8 +150,8 @@ class BotManager:
                     )
                 )
                 # Если остались еще вопросы
-                await self.checking_next_question(
-                    update=update, game_id=game_id, unused_questions=unused_questions
+                await self.checking_last_question(
+                    update=update, game_id=game_id, unused_questions=unused_questions[1:]
                 )
 
             else:
@@ -156,10 +160,10 @@ class BotManager:
                 )
                 # Если больше не осталось пользователей с попытками
                 if not users_with_attempts_list[1:]:
-                    await self.checking_next_question(
+                    await self.checking_last_question(
                         update=update,
                         game_id=game_id,
-                        unused_questions=unused_questions,
+                        unused_questions=unused_questions[1:],
                     )
 
     async def handle_updates(self, update: Update):

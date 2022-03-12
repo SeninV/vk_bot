@@ -134,7 +134,7 @@ class VkApiAccessor(BaseAccessor):
         return members
 
     # Клавиатура для вк
-    def get_but(self, text: str, colour: str):
+    def get_but(self, text: str, colour: str) -> dict:
         return {
             "action": {
                 "type": "text",
@@ -144,7 +144,7 @@ class VkApiAccessor(BaseAccessor):
             "color": colour,
         }
 
-    def get_keyboard(self, text: typing.List[str]):
+    def get_keyboard(self, text: typing.List[str]) -> str:
         keyboard = {
             "one_time": False,
             "buttons": [
@@ -175,7 +175,7 @@ class VkApiAccessor(BaseAccessor):
             data = await resp.json()
             self.logger.info(data)
 
-    async def delet_keyboard(self, message: Message) -> None:
+    async def delete_keyboard(self, message: Message) -> None:
         keyboard = {
             "one_time": True,
             "buttons": [],
