@@ -8,7 +8,6 @@ from app.quiz.models import Answer
 from app.quiz.schemes import ThemeListSchema
 from app.store.bot.models import UserModel, Game, GameModel, Score, ScoreModel
 
-
 class BotAccessor(BaseAccessor):
     async def connect(self, app: "Application"):
         await super().connect(app)
