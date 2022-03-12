@@ -8,6 +8,7 @@ from app.quiz.models import Answer
 from app.quiz.schemes import ThemeListSchema
 from app.store.bot.models import UserModel, Game, GameModel, Score, ScoreModel
 
+
 class BotAccessor(BaseAccessor):
     async def connect(self, app: "Application"):
         await super().connect(app)
@@ -34,6 +35,28 @@ class BotAccessor(BaseAccessor):
         user_list = await UserModel.query.gino.all()
         return [o.to_dc() for o in user_list]
 
+    async def get_users_with_attempts(self, game_id: int) -> Optional[list]:
+        score_list = (
+            await ScoreModel.query.where(ScoreModel.game_id == game_id)
+            .where(ScoreModel.user_attempts == 0)
+            .gino.all()
+        )
+        return [o.to_dc().user_id for o in score_list]
+
+    async def update_user_score(self, game_id: int, user_id: int):
+        await ScoreModel.update.values(points=1 + ScoreModel.points).where(
+            ScoreModel.game_id == game_id
+        ).where(ScoreModel.user_id == user_id).gino.all()
+
+    async def increase_user_attempts(self, game_id: int, user_id: int):
+        await ScoreModel.update.values(user_attempts=1).where(
+            ScoreModel.game_id == game_id
+        ).where(ScoreModel.user_id == user_id).gino.all()
+
+    async def reset_to_zero_attempts(self, game_id: int):
+        await ScoreModel.update.values(user_attempts=0).where(
+            ScoreModel.game_id == game_id
+        ).gino.all()
 
     def theme_response(self, themes_all) -> str:
         text = ""
@@ -56,6 +79,10 @@ class BotAccessor(BaseAccessor):
             text += [ans.title]
         return text
 
+    def get_answer(self, answer: List[Answer]) -> str:
+        for ans in answer:
+            if ans.is_correct:
+                return ans.title
 
     async def create_game(self, chat_id: int) -> Game:
         game = await GameModel.create(
@@ -67,11 +94,12 @@ class BotAccessor(BaseAccessor):
         )
         return game.to_dc()
 
-
-    async def update_game_theme(self, chat_id: int, status: str, theme_id: int, unused_questions: list[int]):
-        await GameModel.update.where(
-            GameModel.chat_id == chat_id
-        ).where(GameModel.status == "start").gino.first(
+    async def update_game_theme(
+        self, chat_id: int, status: str, theme_id: int, unused_questions: list[int]
+    ):
+        await GameModel.update.where(GameModel.chat_id == chat_id).where(
+            GameModel.status == "start"
+        ).gino.first(
             {
                 "status": status,
                 "theme_id": theme_id,
@@ -80,15 +108,36 @@ class BotAccessor(BaseAccessor):
         )
 
     async def update_game_duration(self, chat_id: int, status: str, duration: int):
-        await GameModel.update.where(
-            GameModel.chat_id == chat_id
-        ).where(GameModel.status == "duration").gino.first(
+        await GameModel.update.where(GameModel.chat_id == chat_id).where(
+            GameModel.status == "duration"
+        ).gino.first(
             {
                 "status": status,
                 "duration": duration,
             }
         )
 
+    async def update_game_unused_questions(
+        self, chat_id: int, unused_questions: list[int]
+    ):
+        await GameModel.update.where(GameModel.chat_id == chat_id).where(
+            GameModel.status == "playing"
+        ).gino.first(
+            {
+                "unused_questions": unused_questions,
+            }
+        )
+
+    async def update_game_over(self, chat_id: int):
+        await GameModel.update.where(GameModel.chat_id == chat_id).where(
+            GameModel.status == "playing"
+        ).gino.first(
+            {
+                "status": "finish",
+                "end": datetime.now(),
+                "unused_questions": {},
+            }
+        )
 
     async def last_game(self, chat_id: int) -> Optional[Game]:
         last_game = (
@@ -99,3 +148,14 @@ class BotAccessor(BaseAccessor):
         if not last_game:
             return None
         return last_game.to_dc()
+
+    async def stat_game_response(self, game_id: int) -> str:
+        participants = (
+            await ScoreModel.query.where(ScoreModel.game_id == game_id)
+            .order_by(ScoreModel.points.desc())
+            .gino.all()
+        )
+        text = ""
+        for i, par in enumerate(participants, 1):
+            text += f"%0A {i}) @id{par.user_id} - {par.points}"
+        return text

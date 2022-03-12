@@ -7,10 +7,10 @@ from app.store.database.gino import db
 
 
 class GameStatus(Enum):
-    START = 'start'
-    DURATION = 'duration'
-    PLAYING = 'playing'
-    FINISH = 'finish'
+    START = "start"
+    DURATION = "duration"
+    PLAYING = "playing"
+    FINISH = "finish"
 
     def __str__(self):
         return str(self.value)
@@ -20,6 +20,7 @@ class GameStatus(Enum):
 
     def __hash__(self):
         return hash(str(self))
+
 
 @dataclass
 class Game:

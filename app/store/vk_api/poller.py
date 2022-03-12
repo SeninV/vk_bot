@@ -14,13 +14,11 @@ class Poller:
         self.queue = Optional[asyncio.Queue]
         self.tasks = []
 
-
     async def worker(self, queue):
         while True:
             update = await queue.get()
             await self.store.bots_manager.handle_updates(update[0])
             queue.task_done()
-
 
     async def start(self):
         self.is_running = True
