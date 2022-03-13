@@ -233,12 +233,14 @@ class BotManager:
         for timeout_task in self.game_timeout_tasks:
             if timeout_task.game_id == game_id:
                 timeout_task.task.remove_done_callback(self.create_game_timeout_callback)
+                timeout_task.task.cancel()
                 self.game_timeout_tasks.remove(timeout_task)
                 break
 
         for timeout_task in self.question_timeout_tasks:
             if timeout_task.game_id == game_id:
                 timeout_task.task.remove_done_callback(self.create_question_timeout_callback)
+                timeout_task.task.cancel()
                 self.question_timeout_tasks.remove(timeout_task)
                 break
 
@@ -264,6 +266,7 @@ class BotManager:
             for timeout_task in self.question_timeout_tasks:
                 if timeout_task.game_id == game_id:
                     timeout_task.task.remove_done_callback(self.create_question_timeout_callback)
+                    timeout_task.task.cancel()
                     self.question_timeout_tasks.remove(timeout_task)
                     break
 
