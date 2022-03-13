@@ -12,6 +12,7 @@ class GameStatus(Enum):
     DURATION = "duration"
     DURATION_QUESTION = "duration_question"
     PLAYING = "playing"
+    PAUSE = "pause"
     FINISH = "finish"
 
     def __str__(self):
@@ -29,6 +30,7 @@ class TimeoutTask:
     game_id: int
     chat_id: int
     task: Task
+
 
 @dataclass
 class Game:

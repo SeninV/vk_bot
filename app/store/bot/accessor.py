@@ -147,6 +147,26 @@ class BotAccessor(BaseAccessor):
             }
         )
 
+    async def update_game_pause(self, chat_id: int, status: str, duration: int):
+        await GameModel.update.where(GameModel.chat_id == chat_id).where(
+            GameModel.status == "playing"
+        ).gino.first(
+            {
+                "status": status,
+                "duration_game": duration,
+            }
+        )
+
+    async def update_game_continue(self, chat_id: int, status: str):
+        await GameModel.update.where(GameModel.chat_id == chat_id).where(
+            GameModel.status == "pause"
+        ).gino.first(
+            {
+                "status": status,
+                "start": datetime.now(),
+            }
+        )
+
     async def update_game_over(self, chat_id: int):
         await GameModel.update.where(GameModel.chat_id == chat_id).where(
             GameModel.status == "playing"
