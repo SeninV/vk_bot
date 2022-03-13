@@ -1,3 +1,4 @@
+from asyncio import Task
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List
@@ -22,6 +23,12 @@ class GameStatus(Enum):
     def __hash__(self):
         return hash(str(self))
 
+
+@dataclass
+class TimeoutTask:
+    game_id: int
+    chat_id: int
+    task: Task
 
 @dataclass
 class Game:

@@ -29,7 +29,7 @@ class QuizAccessor(BaseAccessor):
         return None if theme_id is None else theme_id.to_dc()
 
     async def list_themes(self) -> List[Theme]:
-        theme_list = await ThemeModel.query.gino.all()
+        theme_list = await ThemeModel.query.order_by(ThemeModel.id).gino.all()
         return [o.to_dc() for o in theme_list]
 
     async def create_answers(self, question_id, answers: List[Answer]):
