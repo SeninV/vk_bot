@@ -1,8 +1,11 @@
-from aiohttp_apispec import request_schema, response_schema
+from aiohttp_apispec import request_schema, response_schema, querystring_schema
 from aiohttp_session import new_session
 
 from app.admin.schemes import (
     AdminSchema,
+    GamesLimitOffsetSchema,
+    ListGameSchema,
+    ListStatGameSchema,
 )
 from app.web.app import View
 from aiohttp.web import HTTPForbidden, HTTPUnauthorized
@@ -35,8 +38,53 @@ class AdminCurrentView(View):
 
 
 class AdminGames(AuthRequiredMixin, View):
-    pass
+    @querystring_schema(GamesLimitOffsetSchema)
+    @response_schema(ListGameSchema)
+    async def get(self):
+        limit = self.request.query.get("limit")
+        offset = self.request.query.get("offset")
+
+        games = await self.store.bot_accessor.list_games(limit=limit, offset=offset)
+
+        return json_response(
+            data=ListGameSchema().dump(
+                {
+                    "total": len(games),
+                    "games": games,
+                }
+            )
+        )
 
 
 class AdminGameStat(AuthRequiredMixin, View):
-    pass
+    @response_schema(ListStatGameSchema)
+    async def get(self):
+        games = await self.store.bot_accessor.list_game_stats()
+
+        if games:
+            games_total = 0
+            duration_total = 0
+            day = games[0].end.day
+            all_days = 1
+            winner = await self.store.bot_accessor.top_winner()
+            for game in games:
+                games_total += 1
+                duration_total = duration_total + game.duration_game
+                if day != game.end.day:
+                    day = game.end.day
+                    all_days += 1
+            game_avg_per_day = games_total / all_days
+            duration_avg = duration_total / games_total
+        else:
+            return json_response()
+        return json_response(
+            data=ListStatGameSchema().dump(
+                {
+                    "game_avg_per_day": game_avg_per_day,
+                    "winner": winner,
+                    "duration_total": duration_total,
+                    "games_total": games_total,
+                    "duration_avg": duration_avg,
+                }
+            )
+        )

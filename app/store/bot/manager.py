@@ -26,7 +26,7 @@ class BotManager:
             update = task.result()["update"]
             await self.app.store.vk_api.send_message(
                 Message(
-                    text=f"Время игры",
+                    text=f"Время игры истекло",
                     peer_id=update.object.peer_id,
                 )
             )
@@ -40,9 +40,15 @@ class BotManager:
             update = task.result()["update"]
             unused_questions = task.result()["unused_questions"]
             time_to_sleep = task.result()["time_to_sleep"]
+
+            question = await self.app.store.quizzes.get_question_by_id(
+                unused_questions[0]
+            )
+            right_answer = self.app.store.bot_accessor.get_answer(question.answers)
+
             await self.app.store.vk_api.send_message(
                 Message(
-                    text=f"Время на вопрос истекло",
+                    text=f"Время на вопрос истекло %0A Правильный ответ: {right_answer}",
                     peer_id=update.object.peer_id,
                 )
             )
@@ -220,8 +226,11 @@ class BotManager:
         )
 
     async def game_over(self, update: Update, game_id: int):
+
+        winner = await self.app.store.bot_accessor.get_winner(game_id=game_id)
+
         await self.app.store.bot_accessor.update_game_over(
-            chat_id=update.object.peer_id
+            chat_id=update.object.peer_id, winner=winner
         )
         participants = await self.app.store.bot_accessor.stat_game_response(
             game_id=game_id
@@ -243,6 +252,10 @@ class BotManager:
                 timeout_task.task.cancel()
                 self.question_timeout_tasks.remove(timeout_task)
                 break
+
+        await self.app.store.bot_accessor.update_win_count(
+            game_id=game_id, winner=winner
+        )
 
         await self.app.store.vk_api.delete_keyboard(
             Message(
@@ -338,6 +351,13 @@ class BotManager:
                 )
                 # Если больше не осталось пользователей с попытками
                 if not users_with_attempts_list[1:]:
+
+                    await self.app.store.vk_api.send_message(
+                        Message(
+                            text=f"Никто не ответил правильно( %0A Правильный ответ: {right_answer}",
+                            peer_id=update.object.peer_id,
+                        )
+                    )
                     await self.checking_last_question(
                         update=update,
                         game_id=game_id,
@@ -375,9 +395,7 @@ class BotManager:
 
     async def game_pause(self, update: Update, game: Game):
         time_left = round(
-            game.duration_game
-            + game.start.timestamp()
-            - datetime.now().timestamp()
+            game.duration_game + game.start.timestamp() - datetime.now().timestamp()
         )
         a = 1
         #     Останавливаем таски

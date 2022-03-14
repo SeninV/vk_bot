@@ -42,6 +42,7 @@ class Game:
     duration_game: int
     duration_question: int
     theme_id: int
+    winner: int
     unused_questions: List[int]
 
 
@@ -57,6 +58,7 @@ class GameModel(db.Model):
     duration_question = db.Column(db.Integer(), nullable=False)
     theme_id = db.Column(db.Integer(), db.ForeignKey("themes.id", ondelete="CASCADE"))
     unused_questions = db.Column(db.ARRAY(db.Integer()))
+    winner = db.Column(db.ForeignKey("users.user_id"))
 
     def to_dc(self):
         return Game(
@@ -69,6 +71,7 @@ class GameModel(db.Model):
             duration_question=self.duration_question,
             theme_id=self.theme_id,
             unused_questions=self.unused_questions,
+            winner=self.winner,
         )
 
 
