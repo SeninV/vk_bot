@@ -82,13 +82,13 @@ class BotAccessor(BaseAccessor):
     def game_duration_response(self) -> str:
         text = ""
         for duration in self.game_durations:
-            text += f" %0A {duration} мин"
+            text += f" %0A {duration} (мин)"
         return text
 
     def question_duration_response(self) -> str:
         text = ""
         for duration in self.question_durations:
-            text += f" %0A {duration} сек"
+            text += f" %0A {duration} (сек)"
         return text
 
     def answer_response_keyboard(self, answer: List[Answer]) -> List[str]:
@@ -208,12 +208,15 @@ class BotAccessor(BaseAccessor):
         played_game = await GameModel.query.where(GameModel.id == game_id).gino.first()
         return played_game.to_dc().unused_questions
 
-    async def stat_game_response(self, game_id: int) -> str:
+    async def stat_game(self, game_id: int) -> list[Score]:
         participants = (
             await ScoreModel.query.where(ScoreModel.game_id == game_id)
             .order_by(ScoreModel.points.desc())
             .gino.all()
         )
+        return participants
+
+    def stat_game_response(self, participants: list[Score]) -> str:
         text = ""
         for i, par in enumerate(participants, 1):
             text += f"%0A {i}) @id{par.user_id} - {par.points}"

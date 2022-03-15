@@ -226,14 +226,14 @@ class BotManager:
         )
 
     async def game_over(self, update: Update, game_id: int):
-
-        winner = await self.app.store.bot_accessor.get_winner(game_id=game_id)
+        game_stat = await self.app.store.bot_accessor.stat_game(game_id=game_id)
+        winner = game_stat[0].user_id
 
         await self.app.store.bot_accessor.update_game_over(
             chat_id=update.object.peer_id, winner=winner
         )
-        participants = await self.app.store.bot_accessor.stat_game_response(
-            game_id=game_id
+        participants = self.app.store.bot_accessor.stat_game_response(
+            participants=game_stat
         )
         for timeout_task in self.game_timeout_tasks:
             if timeout_task.game_id == game_id:
@@ -331,6 +331,7 @@ class BotManager:
                 await self.app.store.bot_accessor.update_user_score(
                     game_id=game_id, user_id=update.object.user_id
                 )
+
                 await self.app.store.vk_api.send_message(
                     Message(
                         text=f"Правильный ответ дал пользователь @id{update.object.user_id}",
@@ -372,8 +373,9 @@ class BotManager:
             time_to_end = round(
                 duration + time.timestamp() - datetime.now().timestamp()
             )
-            participants = await self.app.store.bot_accessor.stat_game_response(
-                game_id=game_id
+            game_stat = await self.app.store.bot_accessor.stat_game(game_id=game_id)
+            participants = self.app.store.bot_accessor.stat_game_response(
+                participants=game_stat
             )
             await self.app.store.vk_api.send_message(
                 Message(
@@ -383,8 +385,9 @@ class BotManager:
                 )
             )
         elif status == GameStatus.FINISH:
-            participants = await self.app.store.bot_accessor.stat_game_response(
-                game_id=game_id
+            game_stat = await self.app.store.bot_accessor.stat_game(game_id=game_id)
+            participants = self.app.store.bot_accessor.stat_game_response(
+                participants=game_stat
             )
             await self.app.store.vk_api.send_message(
                 Message(
@@ -423,8 +426,9 @@ class BotManager:
             duration=time_left,
         )
 
-        participants = await self.app.store.bot_accessor.stat_game_response(
-            game_id=game.id
+        game_stat = await self.app.store.bot_accessor.stat_game(game_id=game.id)
+        participants = self.app.store.bot_accessor.stat_game_response(
+            participants=game_stat
         )
         await self.app.store.vk_api.delete_keyboard(
             Message(
