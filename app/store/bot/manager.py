@@ -2,9 +2,10 @@ import asyncio
 import typing
 import random
 from asyncio import Task
+from datetime import datetime
 from logging import getLogger
 
-from app.store.bot.models import GameModel, GameStatus, TimeoutTask
+from app.store.bot.models import GameModel, GameStatus, TimeoutTask, Game
 from app.store.vk_api.dataclasses import Update, Message, KeyboardMessage
 
 if typing.TYPE_CHECKING:
@@ -19,16 +20,13 @@ class BotManager:
         self.game_timeout_tasks: list[TimeoutTask] = []
         self.question_timeout_tasks: list[TimeoutTask] = []
 
-
-
-
     def create_game_timeout_callback(self, task: Task):
         async def check_game(task: Task):
             game_id = task.result()["game_id"]
             update = task.result()["update"]
             await self.app.store.vk_api.send_message(
                 Message(
-                    text=f"Время игры",
+                    text=f"Время игры истекло",
                     peer_id=update.object.peer_id,
                 )
             )
@@ -36,16 +34,21 @@ class BotManager:
 
         asyncio.create_task(coro=check_game(task=task))
 
-
     def create_question_timeout_callback(self, task: Task):
         async def check_question(task: Task):
             game_id = task.result()["game_id"]
             update = task.result()["update"]
             unused_questions = task.result()["unused_questions"]
             time_to_sleep = task.result()["time_to_sleep"]
+
+            question = await self.app.store.quizzes.get_question_by_id(
+                unused_questions[0]
+            )
+            right_answer = self.app.store.bot_accessor.get_answer(question.answers)
+
             await self.app.store.vk_api.send_message(
                 Message(
-                    text=f"Время на вопрос истекло",
+                    text=f"Время на вопрос истекло %0A Правильный ответ: {right_answer}",
                     peer_id=update.object.peer_id,
                 )
             )
@@ -76,7 +79,7 @@ class BotManager:
                 "update": update,
                 "game_id": game_id,
                 "unused_questions": unused_questions,
-                "time_to_sleep": sleep
+                "time_to_sleep": sleep,
             },
         )
 
@@ -126,7 +129,7 @@ class BotManager:
             await self.app.store.bot_accessor.update_game_duration(
                 chat_id=update.object.peer_id,
                 status="duration_question",
-                duration=int(update.object.body),
+                duration=int(update.object.body) * 60,
             )
 
             users = await self.app.store.bot_accessor.get_all_users()
@@ -176,7 +179,7 @@ class BotManager:
 
             game_task = asyncio.create_task(
                 self.timeout_task_game(
-                    update=update, game_id=game_id, sleep=game_duration * 60
+                    update=update, game_id=game_id, sleep=game_duration
                 )
             )
             game_task.add_done_callback(self.create_game_timeout_callback)
@@ -188,7 +191,6 @@ class BotManager:
                     task=game_task,
                 )
             )
-
 
             question_task = asyncio.create_task(
                 self.timeout_task_question(
@@ -224,25 +226,36 @@ class BotManager:
         )
 
     async def game_over(self, update: Update, game_id: int):
+        game_stat = await self.app.store.bot_accessor.stat_game(game_id=game_id)
+        winner = game_stat[0].user_id
+
         await self.app.store.bot_accessor.update_game_over(
-            chat_id=update.object.peer_id
+            chat_id=update.object.peer_id, winner=winner
         )
-        participants = await self.app.store.bot_accessor.stat_game_response(
-            game_id=game_id
+        participants = self.app.store.bot_accessor.stat_game_response(
+            participants=game_stat
         )
         for timeout_task in self.game_timeout_tasks:
             if timeout_task.game_id == game_id:
-                timeout_task.task.remove_done_callback(self.create_game_timeout_callback)
+                timeout_task.task.remove_done_callback(
+                    self.create_game_timeout_callback
+                )
                 timeout_task.task.cancel()
                 self.game_timeout_tasks.remove(timeout_task)
                 break
 
         for timeout_task in self.question_timeout_tasks:
             if timeout_task.game_id == game_id:
-                timeout_task.task.remove_done_callback(self.create_question_timeout_callback)
+                timeout_task.task.remove_done_callback(
+                    self.create_question_timeout_callback
+                )
                 timeout_task.task.cancel()
                 self.question_timeout_tasks.remove(timeout_task)
                 break
+
+        await self.app.store.bot_accessor.update_win_count(
+            game_id=game_id, winner=winner
+        )
 
         await self.app.store.vk_api.delete_keyboard(
             Message(
@@ -252,7 +265,11 @@ class BotManager:
         )
 
     async def checking_last_question(
-        self, update: Update, game_id: int, unused_questions: list[int], time_to_sleep:int
+        self,
+        update: Update,
+        game_id: int,
+        unused_questions: list[int],
+        time_to_sleep: int,
     ):
         if not unused_questions:
             await self.game_over(update, game_id=game_id)
@@ -265,7 +282,9 @@ class BotManager:
 
             for timeout_task in self.question_timeout_tasks:
                 if timeout_task.game_id == game_id:
-                    timeout_task.task.remove_done_callback(self.create_question_timeout_callback)
+                    timeout_task.task.remove_done_callback(
+                        self.create_question_timeout_callback
+                    )
                     timeout_task.task.cancel()
                     self.question_timeout_tasks.remove(timeout_task)
                     break
@@ -288,9 +307,12 @@ class BotManager:
                 )
             )
 
-
     async def response_processing(
-        self, update: Update, game_id: int, unused_questions: list[int], time_to_sleep:int
+        self,
+        update: Update,
+        game_id: int,
+        unused_questions: list[int],
+        time_to_sleep: int,
     ):
         users_with_attempts_list = (
             await self.app.store.bot_accessor.get_users_with_attempts(game_id=game_id)
@@ -309,6 +331,7 @@ class BotManager:
                 await self.app.store.bot_accessor.update_user_score(
                     game_id=game_id, user_id=update.object.user_id
                 )
+
                 await self.app.store.vk_api.send_message(
                     Message(
                         text=f"Правильный ответ дал пользователь @id{update.object.user_id}",
@@ -329,12 +352,132 @@ class BotManager:
                 )
                 # Если больше не осталось пользователей с попытками
                 if not users_with_attempts_list[1:]:
+
+                    await self.app.store.vk_api.send_message(
+                        Message(
+                            text=f"Никто не ответил правильно( %0A Правильный ответ: {right_answer}",
+                            peer_id=update.object.peer_id,
+                        )
+                    )
                     await self.checking_last_question(
                         update=update,
                         game_id=game_id,
                         unused_questions=unused_questions[1:],
                         time_to_sleep=time_to_sleep,
                     )
+
+    async def game_stats(
+        self, update: Update, game_id: int, duration: int, time: datetime, status: str
+    ):
+        if status == GameStatus.PLAYING:
+            time_to_end = round(
+                duration + time.timestamp() - datetime.now().timestamp()
+            )
+            game_stat = await self.app.store.bot_accessor.stat_game(game_id=game_id)
+            participants = self.app.store.bot_accessor.stat_game_response(
+                participants=game_stat
+            )
+            await self.app.store.vk_api.send_message(
+                Message(
+                    text=f"Cчет игры: {participants}"
+                    f"%0A Время до конца игры: {time_to_end} сек",
+                    peer_id=update.object.peer_id,
+                )
+            )
+        elif status == GameStatus.FINISH:
+            game_stat = await self.app.store.bot_accessor.stat_game(game_id=game_id)
+            participants = self.app.store.bot_accessor.stat_game_response(
+                participants=game_stat
+            )
+            await self.app.store.vk_api.send_message(
+                Message(
+                    text=f"Cчет игры: {participants}",
+                    peer_id=update.object.peer_id,
+                )
+            )
+
+    async def game_pause(self, update: Update, game: Game):
+        time_left = round(
+            game.duration_game + game.start.timestamp() - datetime.now().timestamp()
+        )
+        a = 1
+        #     Останавливаем таски
+        for timeout_task in self.game_timeout_tasks:
+            if timeout_task.game_id == game.id:
+                timeout_task.task.remove_done_callback(
+                    self.create_game_timeout_callback
+                )
+                timeout_task.task.cancel()
+                self.game_timeout_tasks.remove(timeout_task)
+                break
+
+        for timeout_task in self.question_timeout_tasks:
+            if timeout_task.game_id == game.id:
+                timeout_task.task.remove_done_callback(
+                    self.create_question_timeout_callback
+                )
+                timeout_task.task.cancel()
+                self.question_timeout_tasks.remove(timeout_task)
+                break
+
+        await self.app.store.bot_accessor.update_game_pause(
+            chat_id=update.object.peer_id,
+            status="pause",
+            duration=time_left,
+        )
+
+        game_stat = await self.app.store.bot_accessor.stat_game(game_id=game.id)
+        participants = self.app.store.bot_accessor.stat_game_response(
+            participants=game_stat
+        )
+        await self.app.store.vk_api.delete_keyboard(
+            Message(
+                text=f"Игра на паузе %0A Текущий счет: {participants}",
+                peer_id=update.object.peer_id,
+            )
+        )
+
+    async def game_continue(self, update: Update, game: Game):
+
+        await self.app.store.bot_accessor.update_game_continue(
+            chat_id=update.object.peer_id,
+            status="playing",
+        )
+        # Возобновляем таски
+        game_task = asyncio.create_task(
+            self.timeout_task_game(
+                update=update, game_id=game.id, sleep=game.duration_game
+            )
+        )
+        game_task.add_done_callback(self.create_game_timeout_callback)
+
+        self.game_timeout_tasks.append(
+            TimeoutTask(
+                game_id=game.id,
+                chat_id=update.object.peer_id,
+                task=game_task,
+            )
+        )
+
+        question_task = asyncio.create_task(
+            self.timeout_task_question(
+                update=update,
+                game_id=game.id,
+                sleep=game.duration_question,
+                unused_questions=game.unused_questions,
+            )
+        )
+        question_task.add_done_callback(self.create_question_timeout_callback)
+
+        self.question_timeout_tasks.append(
+            TimeoutTask(
+                game_id=game.id,
+                chat_id=update.object.peer_id,
+                task=question_task,
+            )
+        )
+
+        await self.ask_question(update, unused_questions=game.unused_questions)
 
     async def handle_updates(self, update: Update):
         game = await self.app.store.bot_accessor.last_game(update.object.peer_id)
@@ -345,21 +488,29 @@ class BotManager:
             else:
                 await self.app.store.vk_api.send_message(
                     Message(
-                        text="\start - начало игры %0A \stat - статистика по игре  %0A \end - окончание по игры",
+                        text="\start - начало игры",
                         peer_id=update.object.peer_id,
                     )
                 )
         else:
             # Если раньше были игры
             game_status = game.status
-            if game_status == GameStatus.FINISH and update.object.body == "\start":
-                await self.start_game(update)
+            if update.object.body == "\stat":
+                await self.game_stats(
+                    update,
+                    game_id=game.id,
+                    duration=game.duration_game,
+                    time=game.start,
+                    status=game_status,
+                )
+            elif game_status == GameStatus.FINISH and update.object.body == "\start":
+                await self.start_game(update=update)
             elif game_status == GameStatus.START and update.object.body.isdigit():
-                if await self.choose_theme(update):
-                    await self.send_game_durations(update)
+                if await self.choose_theme(update=update):
+                    await self.send_game_durations(update=update)
             elif game_status == GameStatus.DURATION and update.object.body.isdigit():
-                if await self.choose_game_duration(update, game_id=game.id):
-                    await self.send_question_durations(update)
+                if await self.choose_game_duration(update=update, game_id=game.id):
+                    await self.send_question_durations(update=update)
 
             elif (
                 game_status == GameStatus.DURATION_QUESTION
@@ -376,14 +527,23 @@ class BotManager:
                     )
 
             elif game_status == GameStatus.PLAYING:
-                await self.response_processing(
-                    update, game_id=game.id, unused_questions=game.unused_questions, time_to_sleep=game.duration_question,
-                )
+                if update.object.body == "\pause":
+                    await self.game_pause(update=update, game=game)
+                else:
+                    await self.response_processing(
+                        update,
+                        game_id=game.id,
+                        unused_questions=game.unused_questions,
+                        time_to_sleep=game.duration_question,
+                    )
+            elif game_status == GameStatus.PAUSE:
+                if update.object.body == "\continue":
+                    await self.game_continue(update=update, game=game)
 
             else:
                 await self.app.store.vk_api.send_message(
                     Message(
-                        text="\start - начало игры %0A \stat - статистика по игре  %0A \end - окончание по игры",
+                        text="\start - начало игры %0A \stat - статистика по игре  %0A \pause - пауза в игре %0A \continue - продолжение игры",
                         peer_id=update.object.peer_id,
                     )
                 )
